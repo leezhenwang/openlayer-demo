@@ -30,7 +30,7 @@ const mapContainer = ref(null)
  * 初始地理要素数据
  * 包含一条从北京到上海的物流路线
  */
-// 修改初始地理要素数据 - 长沙到北京路线
+// 修改初始地理要素数据 - 添加途经点
 const initialFeatures = {
   type: 'FeatureCollection',
   features: [
@@ -39,12 +39,29 @@ const initialFeatures = {
       geometry: {
         type: 'LineString',
         coordinates: [
-          [112.938, 28.229],  // 长沙坐标(经度,纬度)
-          [116.397, 39.908]   // 北京坐标(经度,纬度)
+          [112.938, 28.229],  // 长沙
+          [113.264, 27.869],  // 株洲
+          [113.000, 28.200],  // 湘潭 
+          [113.134, 28.179],  // 长沙县
+          [113.624, 28.119],  // 浏阳
+          [114.025, 28.185],  // 萍乡
+          [114.892, 27.797],  // 新余
+          [115.900, 28.683],  // 南昌
+          [116.358, 29.292],  // 九江
+          [117.000, 30.500],  // 安庆
+          [117.283, 31.867],  // 合肥
+          [117.200, 32.617],  // 淮南
+          [116.588, 33.383],  // 宿州
+          [116.397, 34.908],  // 商丘
+          [116.597, 35.408],  // 菏泽
+          [116.397, 36.908],  // 聊城
+          [116.397, 37.908],  // 德州
+          [116.397, 38.908],  // 沧州
+          [116.397, 39.908]   // 北京
         ]
       },
       properties: {
-        routeId: 'CS-BJ-001',  // 修改路线ID
+        routeId: 'CS-BJ-001',
         status: 'in-transit'
       }
     }
@@ -126,7 +143,6 @@ onMounted(() => {
     });
 
     // 创建标记点样式时添加文字样式
-    // 修改标记点样式为打卡标记样式
     const markerStyle = new Style({
       image: new Circle({
         radius: 10,
@@ -236,19 +252,49 @@ onMounted(() => {
     });
 
     // 车辆移动动画 - 可调整速度和步数
+    // 创建途经点标记
+    const waypoints = initialFeatures.features[0].geometry.coordinates
+      .slice(1, -1) // 排除起点和终点
+      .map((coord, index) => {
+        const marker = new Feature({
+          geometry: new Point(fromLonLat(coord)),
+          name: `途经点${index + 1}`,
+          type: 'waypoint'
+        });
+        const style = new Style({
+          image: new Circle({
+            radius: 5,
+            fill: new Fill({ color: '#3388ff' }),
+            stroke: new Stroke({ color: '#ffffff', width: 2 })
+          })
+        });
+        marker.setStyle(style);
+        return marker;
+      });
+    
+    // 将途经点添加到数据源
+    vectorSource.addFeatures(waypoints);
+    
+    // 修改车辆动画
     let step = 0;
     const timer = setInterval(() => {
       const coordinates = initialFeatures.features[0].geometry.coordinates;
       const progress = step / 100;
+      const segmentLength = 1 / (coordinates.length - 1);
+      const segmentIndex = Math.floor(progress / segmentLength);
+      const segmentProgress = (progress % segmentLength) / segmentLength;
+      
+      const startCoord = coordinates[segmentIndex];
+      const endCoord = coordinates[segmentIndex + 1];
+      
       const newCoord = [
-        coordinates[0][0] + (coordinates[1][0] - coordinates[0][0]) * progress,
-        coordinates[0][1] + (coordinates[1][1] - coordinates[0][1]) * progress
+        startCoord[0] + (endCoord[0] - startCoord[0]) * segmentProgress,
+        startCoord[1] + (endCoord[1] - startCoord[1]) * segmentProgress
       ];
       
-      // 更新车辆位置
-      vehicleMarker.getGeometry().setCoordinates(newCoord);
+      vehicleMarker.getGeometry().setCoordinates(fromLonLat(newCoord));
       
-      if(++step > 100) clearInterval(timer);  // 可调整总步数
+      if(++step > 100) clearInterval(timer);
     }, 50);  // 可调整时间间隔(毫秒)
   }
 });
