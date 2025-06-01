@@ -21,55 +21,19 @@ import { defaults, ScaleLine  } from 'ol/control';  // 添加这行导入
 import { Style, Stroke, Circle, Fill, Text } from 'ol/style';
 // 在OpenLayers核心模块导入部分添加
 import Overlay from 'ol/Overlay';
+import dataObj from './data.json'
+
 
 // ... 其他导入保持不变 ...
 // 地图容器引用
 const mapContainer = ref(null)
 
-/**
- * 初始地理要素数据
- * 包含一条从北京到上海的物流路线
- */
-// 修改初始地理要素数据 - 添加途经点
-const initialFeatures = {
-  type: 'FeatureCollection',
-  features: [
-    {
-      type: 'Feature',
-      geometry: {
-        type: 'LineString',
-        coordinates: [
-          [112.938, 28.229],  // 长沙
-          [113.264, 27.869],  // 株洲
-          [113.000, 28.200],  // 湘潭 
-          [113.134, 28.179],  // 长沙县
-          [113.624, 28.119],  // 浏阳
-          [114.025, 28.185],  // 萍乡
-          [114.892, 27.797],  // 新余
-          [115.900, 28.683],  // 南昌
-          [116.358, 29.292],  // 九江
-          [117.000, 30.500],  // 安庆
-          [117.283, 31.867],  // 合肥
-          [117.200, 32.617],  // 淮南
-          [116.588, 33.383],  // 宿州
-          [116.397, 34.908],  // 商丘
-          [116.597, 35.408],  // 菏泽
-          [116.397, 36.908],  // 聊城
-          [116.397, 37.908],  // 德州
-          [116.397, 38.908],  // 沧州
-          [116.397, 39.908]   // 北京
-        ]
-      },
-      properties: {
-        routeId: 'CS-BJ-001',
-        status: 'in-transit'
-      }
-    }
-  ]
-}
-
 // 组件挂载后初始化地图
-onMounted(() => {
+onMounted(async() => {
+  // 高德地图安全密钥
+  window._AMapSecurityConfig = {
+    securityJsCode: "12e57513f121f13436989b40d96bfd7c",
+  };
   if (mapContainer.value) {
     // 创建地图实例
     const map = new Map({
@@ -112,7 +76,38 @@ onMounted(() => {
       ])
       // 清空其他默认控件
     });
-
+    // 定义起点和终点坐标
+    const start = [112.938, 28.229]; // 长沙
+    const end = [116.397, 39.908]; // 北京
+    const waypoints = [
+      [114.892, 27.797], // 新余
+      [116.358, 29.292], // 九江
+      [117.283, 31.867]  // 合肥
+    ];
+    // const routeCoords = await getRouteFromAMap(start, end, waypoints);
+    const routeCoords = dataObj.data;
+    console.log('routeCoords', routeCoords)
+    /**
+     * 初始地理要素数据
+     * 包含一条从北京到上海的物流路线
+     */
+    // 修改初始地理要素数据 - 添加途经点
+    const initialFeatures = {
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: routeCoords
+          },
+          properties: {
+            routeId: 'CS-BJ-001',
+            status: 'in-transit'
+          }
+        }
+      ]
+    }
     /**
      * 创建矢量图层 - 用于显示物流路线
      */
@@ -250,43 +245,32 @@ onMounted(() => {
       padding: [50, 50, 50, 50],
       maxZoom: 10
     });
-
-    // 车辆移动动画 - 可调整速度和步数
-    // 创建途经点标记
-    const waypoints = initialFeatures.features[0].geometry.coordinates
-      .slice(1, -1) // 排除起点和终点
-      .map((coord, index) => {
-        const marker = new Feature({
-          geometry: new Point(fromLonLat(coord)),
-          name: `途经点${index + 1}`,
-          type: 'waypoint'
-        });
-        const style = new Style({
-          image: new Circle({
-            radius: 5,
-            fill: new Fill({ color: '#3388ff' }),
-            stroke: new Stroke({ color: '#ffffff', width: 2 })
-          })
-        });
-        marker.setStyle(style);
-        return marker;
-      });
     
-    // 将途经点添加到数据源
-    vectorSource.addFeatures(waypoints);
-    
-    // 修改车辆动画
+    // 修改车辆动画部分
     let step = 0;
     const timer = setInterval(() => {
       const coordinates = initialFeatures.features[0].geometry.coordinates;
+      
+      // 添加数据验证
+      if (!coordinates || coordinates.length < 2) {
+        clearInterval(timer);
+        return;
+      }
+
       const progress = step / 100;
       const segmentLength = 1 / (coordinates.length - 1);
-      const segmentIndex = Math.floor(progress / segmentLength);
+      const segmentIndex = Math.min(Math.floor(progress / segmentLength), coordinates.length - 2);
       const segmentProgress = (progress % segmentLength) / segmentLength;
       
       const startCoord = coordinates[segmentIndex];
       const endCoord = coordinates[segmentIndex + 1];
       
+      // 确保坐标存在
+      if (!startCoord || !endCoord) {
+        clearInterval(timer);
+        return;
+      }
+
       const newCoord = [
         startCoord[0] + (endCoord[0] - startCoord[0]) * segmentProgress,
         startCoord[1] + (endCoord[1] - startCoord[1]) * segmentProgress
@@ -298,6 +282,27 @@ onMounted(() => {
     }, 50);  // 可调整时间间隔(毫秒)
   }
 });
+// 添加高德地图API请求函数
+async function getRouteFromAMap(start, end, waypoints = []) {
+  const key = 'eb95ed6a0f3107efe0d93256b17800dc'; // 替换为你的实际密钥
+  const waypointsStr = waypoints.map(p => `${p[0]},${p[1]}`).join('|');
+  const url = `https://restapi.amap.com/v3/direction/driving?origin=${start[0]},${start[1]}&destination=${end[0]},${end[1]}&waypoints=${waypointsStr}&key=${key}`;
+  
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    if (data.status === '1') {
+      return data.route.paths[0].steps.flatMap(step => step.polyline.split(';').map(p => {
+        const [lng, lat] = p.split(',');
+        return [parseFloat(lng), parseFloat(lat)];
+      }));
+    }
+    return [];
+  } catch (error) {
+    console.error('获取路线失败:', error);
+    return [];
+  }
+}
 </script>
 
 <style>
