@@ -1,82 +1,80 @@
 <template>
-  <!-- 地图容器 -->
+  <!-- 地图容器 - 用于挂载OpenLayers地图 -->
   <div ref="mapContainer" class="map-container"></div>
 </template>
 
 <script setup>
-// Vue相关导入
+// Vue相关功能导入
 import { ref, onMounted } from 'vue'
 // OpenLayers核心模块导入
-import { Map, View } from 'ol'  // 地图和视图
-import { fromLonLat } from 'ol/proj'  // 坐标转换
+import { Map, View } from 'ol'  // 地图和视图类
+import { fromLonLat } from 'ol/proj'  // 坐标转换工具
 import TileLayer from 'ol/layer/Tile'  // 瓦片图层
-import XYZ from 'ol/source/XYZ'  // XYZ瓦片源
+import XYZ from 'ol/source/XYZ'  // XYZ格式的瓦片数据源
 import VectorLayer from 'ol/layer/Vector'  // 矢量图层
 import VectorSource from 'ol/source/Vector'  // 矢量数据源
-import { GeoJSON } from 'ol/format'  // GeoJSON格式解析
-import Feature from 'ol/Feature'  // 地理要素
-import LineString from 'ol/geom/LineString';  // 线几何图形
-import Point from 'ol/geom/Point';  // 点几何图形
-import { defaults, ScaleLine  } from 'ol/control';  // 添加这行导入
-import { Style, Stroke, Circle, Fill, Text } from 'ol/style';
-// 在OpenLayers核心模块导入部分添加
-import Overlay from 'ol/Overlay';
-import dataObj from './data.json'
+import { GeoJSON } from 'ol/format'  // GeoJSON格式解析器
+import Feature from 'ol/Feature'  // 地理要素类
+import LineString from 'ol/geom/LineString'  // 线几何图形
+import Point from 'ol/geom/Point'  // 点几何图形
+import { defaults, ScaleLine } from 'ol/control'  // 地图控件
+import { Style, Stroke, Circle, Fill, Text, RegularShape } from 'ol/style';
+import Overlay from 'ol/Overlay'  // 覆盖物
+import dataObj from './data.json'  // 导入路线数据
 
-
-// ... 其他导入保持不变 ...
 // 地图容器引用
 const mapContainer = ref(null)
 
 // 组件挂载后初始化地图
 onMounted(async() => {
-  // 高德地图安全密钥
+  // 高德地图安全密钥配置
   window._AMapSecurityConfig = {
     securityJsCode: "12e57513f121f13436989b40d96bfd7c",
   };
+  
   if (mapContainer.value) {
     // 创建地图实例
     const map = new Map({
-      target: mapContainer.value,  // 挂载目标
+      target: mapContainer.value,  // 挂载到DOM元素
       layers: [
         // 底图图层 - 使用高德地图服务
         new TileLayer({
           source: new XYZ({
             url: 'https://webst0{1-4}.is.autonavi.com/appmaptile?style=7&x={x}&y={y}&z={z}',
             attributions: '© <a href="https://www.amap.com/">高德地图</a>',
-            tileSize: 256,
-            crossOrigin: 'anonymous'
+            tileSize: 256,  // 瓦片大小
+            crossOrigin: 'anonymous'  // 跨域设置
           })
         })
       ],
       // 地图视图配置
       view: new View({
-        projection: 'EPSG:3857',  // Web墨卡托投影
+        projection: 'EPSG:3857',  // 使用Web墨卡托投影
         center: fromLonLat([116.397, 39.908]),  // 初始中心点(北京)
         zoom: 5  // 初始缩放级别
       }),
-      // 添加这行配置来自定义控件
-      // 修改controls配置部分
+      // 地图控件配置
       controls: defaults({
-        zoom: true,
+        zoom: true,  // 启用缩放控件
         zoomOptions: {
-          className: 'custom-zoom',
-          zoomInLabel: '+',
-          zoomOutLabel: '-',
-          delta: 1
+          className: 'custom-zoom',  // 自定义样式类
+          zoomInLabel: '+',  // 放大按钮标签
+          zoomOutLabel: '-',  // 缩小按钮标签
+          delta: 1  // 缩放步长
         }
       }).extend([
+        // 添加比例尺控件
         new ScaleLine({
-          units: 'metric',
-          bar: true,
-          steps: 4,  // 明确指定刻度数量
-          text: true,
-          minWidth: 100
+          units: 'metric',  // 使用公制单位
+          bar: true,  // 显示条形比例尺
+          steps: 4,  // 刻度数量
+          text: true,  // 显示文字
+          minWidth: 100  // 最小宽度
         })
       ])
-      // 清空其他默认控件
     });
-    // 定义起点和终点坐标
+
+    // 定义路线起点、终点和途经点
     const start = [112.938, 28.229]; // 长沙
     const end = [116.397, 39.908]; // 北京
     const waypoints = [
@@ -84,14 +82,12 @@ onMounted(async() => {
       [116.358, 29.292], // 九江
       [117.283, 31.867]  // 合肥
     ];
-    // const routeCoords = await getRouteFromAMap(start, end, waypoints);
+
+    // 从JSON文件加载路线坐标
     const routeCoords = dataObj.data;
     console.log('routeCoords', routeCoords)
-    /**
-     * 初始地理要素数据
-     * 包含一条从北京到上海的物流路线
-     */
-    // 修改初始地理要素数据 - 添加途经点
+
+    // 创建GeoJSON格式的路线要素
     const initialFeatures = {
       type: 'FeatureCollection',
       features: [
@@ -99,24 +95,22 @@ onMounted(async() => {
           type: 'Feature',
           geometry: {
             type: 'LineString',
-            coordinates: routeCoords
+            coordinates: routeCoords  // 路线坐标点数组
           },
           properties: {
-            routeId: 'CS-BJ-001',
-            status: 'in-transit'
+            routeId: 'CS-BJ-001',  // 路线ID
+            status: 'in-transit'  // 路线状态
           }
         }
       ]
     }
-    /**
-     * 创建矢量图层 - 用于显示物流路线
-     */
+
+    // 创建矢量数据源并加载GeoJSON数据
     const vectorSource = new VectorSource({
-      // 从GeoJSON数据创建要素
       features: new GeoJSON().readFeatures(initialFeatures)
     });
 
-    // 配置矢量图层样式
+    // 创建矢量图层并设置样式
     const vectorLayer = new VectorLayer({
       source: vectorSource,
       style: {
@@ -128,8 +122,7 @@ onMounted(async() => {
     // 将矢量图层添加到地图
     map.addLayer(vectorLayer);
 
-    
-    // 创建导航路线样式
+    // 创建路线样式
     const routeStyle = new Style({
       stroke: new Stroke({
         color: '#3388ff',
@@ -137,7 +130,7 @@ onMounted(async() => {
       })
     });
 
-    // 创建标记点样式时添加文字样式
+    // 创建标记点样式
     const markerStyle = new Style({
       image: new Circle({
         radius: 10,
@@ -148,11 +141,11 @@ onMounted(async() => {
         })
       }),
       text: new Text({
-        text: '',
-        font: 'bold 12px Microsoft YaHei',
+        text: '',  // 初始无文字
+        font: 'bold 12px Microsoft YaHei',  // 字体设置
         fill: new Fill({ color: '#ffffff' }),  // 白色文字
-        offsetY: 0,
-        textAlign: 'center'
+        offsetY: 0,  // Y轴偏移
+        textAlign: 'center'  // 文字居中
       })
     });
     
@@ -160,28 +153,31 @@ onMounted(async() => {
     const startMarker = new Feature({
       geometry: new Point(fromLonLat(initialFeatures.features[0].geometry.coordinates[0])),
       name: '起点',
-      type: 'start'  // 添加类型标识
+      type: 'start'  // 标记类型为起点
     });
     const startStyle = markerStyle.clone();
-    startStyle.getText().setText('起');
+    startStyle.getText().setText('起');  // 设置起点文字
     startMarker.setStyle(startStyle);
     
-    // 创建终点标记 
+    // 创建终点标记
     const endMarker = new Feature({
       geometry: new Point(fromLonLat(initialFeatures.features[0].geometry.coordinates[1])),
       name: '终点',
-      type: 'end'  // 添加类型标识
+      type: 'end'  // 标记类型为终点
     });
     const endStyle = markerStyle.clone();
-    endStyle.getText().setText('终');
+    endStyle.getText().setText('终');  // 设置终点文字
     endMarker.setStyle(endStyle);
     
-    // 添加点击事件处理
+    // 添加地图点击事件处理
     map.on('click', (evt) => {
+      // 获取点击位置的要素
       const feature = map.forEachFeatureAtPixel(evt.pixel, (f) => f);
+      // 如果是起点或终点标记
       if (feature && (feature.get('type') === 'start' || feature.get('type') === 'end')) {
         const name = feature.get('name');
         const coordinates = feature.getGeometry().getCoordinates();
+        // 创建信息弹窗
         const overlay = new Overlay({
           element: createPopupElement(name),
           position: coordinates,
@@ -189,15 +185,14 @@ onMounted(async() => {
         });
         map.addOverlay(overlay);
         
-        // 点击其他地方时移除标注
+        // 点击其他地方时移除弹窗
         map.once('click', () => {
           map.removeOverlay(overlay);
         });
       }
     });
     
-    // 创建标注元素
-    // 修改createPopupElement函数
+    // 创建弹窗元素的函数
     function createPopupElement(name) {
       const element = document.createElement('div');
       element.className = 'marker-popup';
@@ -211,57 +206,60 @@ onMounted(async() => {
     }
     
     // 创建车辆样式
+    // 创建更精致的车辆样式
     const vehicleStyle = new Style({
-      image: new Circle({
-        radius: 6,
-        fill: new Fill({ color: '#00ff00' }),
-        stroke: new Stroke({ color: '#ffffff', width: 2 })
+      text: new Text({
+        text: '🚚',  // 使用emoji卡车图标
+        font: 'bold 20px Arial',
+        offsetY: 0,
+        fill: new Fill({ color: '#000000' }),
+        rotation: 20
       })
     });
 
-    // 创建路线要素时转换坐标
+    // 创建路线要素
     const routeFeature = new Feature({
       geometry: new LineString(
         initialFeatures.features[0].geometry.coordinates.map(coord => fromLonLat(coord))
       ),
       name: '导航路线'
     });
-    // 应用路线样式
     routeFeature.setStyle(routeStyle);
     
-    
-    // 创建车辆标记时转换坐标
+    // 创建车辆标记
     const vehicleMarker = new Feature({
       geometry: new Point(fromLonLat(initialFeatures.features[0].geometry.coordinates[0])),
       name: '车辆'
     });
     vehicleMarker.setStyle(vehicleStyle);
 
-    // 将要素添加到数据源
+    // 将所有要素添加到数据源
     vectorSource.addFeatures([routeFeature, startMarker, endMarker, vehicleMarker]);
 
     // 调整视图以显示整个路线
     map.getView().fit(routeFeature.getGeometry(), {
-      padding: [50, 50, 50, 50],
-      maxZoom: 10
+      padding: [50, 50, 50, 50],  // 四周留白
+      maxZoom: 10  // 最大缩放级别
     });
     
-    // 修改车辆动画部分
+    // 车辆移动动画
     let step = 0;
     const timer = setInterval(() => {
       const coordinates = initialFeatures.features[0].geometry.coordinates;
       
-      // 添加数据验证
+      // 数据验证
       if (!coordinates || coordinates.length < 2) {
         clearInterval(timer);
         return;
       }
 
+      // 计算动画进度
       const progress = step / 100;
       const segmentLength = 1 / (coordinates.length - 1);
       const segmentIndex = Math.min(Math.floor(progress / segmentLength), coordinates.length - 2);
       const segmentProgress = (progress % segmentLength) / segmentLength;
       
+      // 获取当前线段起点和终点
       const startCoord = coordinates[segmentIndex];
       const endCoord = coordinates[segmentIndex + 1];
       
@@ -271,20 +269,24 @@ onMounted(async() => {
         return;
       }
 
+      // 计算车辆新位置
       const newCoord = [
         startCoord[0] + (endCoord[0] - startCoord[0]) * segmentProgress,
         startCoord[1] + (endCoord[1] - startCoord[1]) * segmentProgress
       ];
       
+      // 更新车辆位置
       vehicleMarker.getGeometry().setCoordinates(fromLonLat(newCoord));
       
+      // 动画完成后清除定时器
       if(++step > 100) clearInterval(timer);
-    }, 50);  // 可调整时间间隔(毫秒)
+    }, 50);  // 每50毫秒更新一次
   }
 });
-// 添加高德地图API请求函数
+
+// 高德地图API请求函数
 async function getRouteFromAMap(start, end, waypoints = []) {
-  const key = 'eb95ed6a0f3107efe0d93256b17800dc'; // 替换为你的实际密钥
+  const key = 'eb95ed6a0f3107efe0d93256b17800dc'; // API密钥
   const waypointsStr = waypoints.map(p => `${p[0]},${p[1]}`).join('|');
   const url = `https://restapi.amap.com/v3/direction/driving?origin=${start[0]},${start[1]}&destination=${end[0]},${end[1]}&waypoints=${waypointsStr}&key=${key}`;
   
@@ -292,10 +294,13 @@ async function getRouteFromAMap(start, end, waypoints = []) {
     const response = await fetch(url);
     const data = await response.json();
     if (data.status === '1') {
-      return data.route.paths[0].steps.flatMap(step => step.polyline.split(';').map(p => {
-        const [lng, lat] = p.split(',');
-        return [parseFloat(lng), parseFloat(lat)];
-      }));
+      // 处理返回的路线数据
+      return data.route.paths[0].steps.flatMap(step => 
+        step.polyline.split(';').map(p => {
+          const [lng, lat] = p.split(',');
+          return [parseFloat(lng), parseFloat(lat)];
+        })
+      );
     }
     return [];
   } catch (error) {
@@ -306,17 +311,20 @@ async function getRouteFromAMap(start, end, waypoints = []) {
 </script>
 
 <style>
+/* 导入OpenLayers默认样式 */
 @import 'ol/ol.css';
 </style>
 
 <style scoped>
+/* 地图容器样式 */
 .map-container {
   width: 100%;
-  height: 100vh;
+  height: 100vh;  /* 全屏高度 */
   background-color: #f0f0f0;
   position: relative;
 }
-/* 使用::v-deep实现深度注入 */
+
+/* 弹窗样式 */
 ::v-deep .marker-popup {
   position: relative;
   background: white;
@@ -339,6 +347,7 @@ async function getRouteFromAMap(start, end, waypoints = []) {
   color: #333;
 }
 
+/* 弹窗箭头样式 */
 ::v-deep .popup-arrow {
   position: absolute;
   bottom: -10px;
